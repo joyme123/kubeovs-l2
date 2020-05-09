@@ -1,0 +1,4 @@
+.vscode
+.vagrant
+bin
+scripts/host-local
