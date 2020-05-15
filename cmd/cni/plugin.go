@@ -352,6 +352,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	result := &current.Result{CNIVersion: cniVersion, Interfaces: []*current.Interface{bridge, hostInterface, containerInterface}}
 
+	// TODO: ipam 可以拿出来，作为一个插件
 	// 从全局拿到应该可分配的 ip addr
 	ipamResult, err := getAvailableIP()
 	if err != nil {
