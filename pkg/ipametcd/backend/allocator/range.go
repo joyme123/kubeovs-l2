@@ -20,6 +20,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/plugins/pkg/ip"
+	"k8s.io/klog"
 )
 
 // Canonicalize takes a given range and ensures that all information is consistent,
@@ -90,6 +91,7 @@ func (r *Range) Canonicalize() error {
 // IsValidIP checks if a given ip is a valid, allocatable address in a given Range
 func (r *Range) Contains(addr net.IP) bool {
 	if err := canonicalizeIP(&addr); err != nil {
+		klog.Infof("%v is not a standard form", addr.String())
 		return false
 	}
 
@@ -97,11 +99,13 @@ func (r *Range) Contains(addr net.IP) bool {
 
 	// Not the same address family
 	if len(addr) != len(r.Subnet.IP) {
+		klog.Infof("%v and %v is not the same address family, addr len: %v, subnet len: %v", addr.String(), r.Subnet.IP.String(), len(addr), len(r.Subnet.IP))
 		return false
 	}
 
 	// Not in network
 	if !subnet.Contains(addr) {
+		klog.Infof("%v not in network", addr.String())
 		return false
 	}
 
@@ -109,6 +113,7 @@ func (r *Range) Contains(addr net.IP) bool {
 	if r.RangeStart != nil {
 		// Before the range start
 		if ip.Cmp(addr, r.RangeStart) < 0 {
+			klog.Infof("%v before the range start %v", addr.String(), r.RangeStart)
 			return false
 		}
 	}
@@ -116,6 +121,7 @@ func (r *Range) Contains(addr net.IP) bool {
 	if r.RangeEnd != nil {
 		if ip.Cmp(addr, r.RangeEnd) > 0 {
 			// After the  range end
+			klog.Infof("%v after the range end %v", addr.String(), r.RangeEnd)
 			return false
 		}
 	}

@@ -17,6 +17,7 @@ package etcd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 
@@ -55,12 +56,12 @@ func New(conf clientv3.Config, network, key string) (*Store, error) {
 
 	cli, err := clientv3.New(conf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new etcd clientv3 error: %v", err)
 	}
 
 	lk, err := NewEtcdLock(cli)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new etcd lock error: %v", err)
 	}
 	return &Store{lk, netWorkKey, cli}, nil
 }

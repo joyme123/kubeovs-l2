@@ -13,5 +13,9 @@ RUN echo \
     
 RUN apt update && apt install -y openvswitch-switch iptables
 
-ADD bin/kubeovs-l2 /bin
-ADD bin/kubeovsd /bin
+ADD bin/kubeovs-l2 /app
+ADD bin/kubeovsd /app
+ADD scripts/start.sh /app
+
+ENTRYPOINT [ "start.sh" ]
+

@@ -31,7 +31,7 @@ type JSONErrorResponse struct {
 func writeOkResponse(w http.ResponseWriter, m interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(&JSONResponse{Code: 0, Data: m}); err != nil {
+	if err := json.NewEncoder(w).Encode(m); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "Internal Server Error")
 	}
 }
@@ -81,4 +81,8 @@ func parseResolvConf(filename string) (*types.DNS, error) {
 	}
 
 	return &dns, nil
+}
+
+func GenerateSocketPath() string {
+	return DefaultKubeOVSDirectory + "kubeovs.sock"
 }

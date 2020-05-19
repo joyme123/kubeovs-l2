@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	cniConfigPath           = "/etc/cni/net.d/10-kubeovsl2.json"
+	cniConfigPath           = "/etc/cni/net.d/10-kubeovsl2.conf"
 	bridgeName              = "kubeovs-br"
 	defaultNIC              = "enp0s8"
 	defaultControllerTarget = "tcp:127.0.0.1:6653"
@@ -114,12 +114,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	klog.Infof("ovs bridge setup successfully")
+
 	// 将物理网卡和 bridge 连接
 	err = setupPhysicalPortToBr()
 	if err != nil {
 		klog.Errorf("failed to add physical NIC to OVS bridge: %v", err)
 		os.Exit(1)
 	}
+
+	klog.Infof("add physical NIC to OVS bridge successfully")
 
 	bridgeLink, err := netlink.LinkByName(bridgeName)
 	if err != nil {
@@ -136,26 +140,24 @@ func main() {
 
 	addrs, err := netlink.AddrList(physicalLink, netlink.FAMILY_V4)
 	if err != nil {
-		klog.Errorf("failed to get physical nic %q ip addr, err: %v", defaultNIC, err)
-		os.Exit(1)
+		klog.Warningf("failed to get physical nic %q ip addr, err: %v", defaultNIC, err)
 	}
 
-	if len(addrs) == 0 {
-		klog.Errorf("failed to get physical nic %q ip addr, err: %v", defaultNIC, err)
-		os.Exit(1)
-	}
+	// 只有在拿到了物理网卡上的 ip 地址后,才会执行分配到 ovs bridge 的操作
+	// 否则默认该操作已经执行过了
+	if len(addrs) > 0 {
+		// TODO: 先假设只有一个
+		err = netlink.AddrDel(physicalLink, &addrs[0])
+		if err != nil {
+			klog.Errorf("failed to del physical nic %q ip addr, err: %v", defaultNIC, err)
+			os.Exit(1)
+		}
 
-	// TODO: 先假设只有一个
-	err = netlink.AddrDel(physicalLink, &addrs[0])
-	if err != nil {
-		klog.Errorf("failed to del physical nic %q ip addr, err: %v", defaultNIC, err)
-		os.Exit(1)
-	}
-
-	err = netlink.AddrAdd(bridgeLink, &netlink.Addr{IPNet: addrs[0].IPNet})
-	if err != nil {
-		klog.Errorf("failed to add bridge %q ip addr, err: %v", bridgeName, err)
-		os.Exit(1)
+		err = netlink.AddrAdd(bridgeLink, &netlink.Addr{IPNet: addrs[0].IPNet})
+		if err != nil {
+			klog.Errorf("failed to add bridge %q ip addr, err: %v", bridgeName, err)
+			os.Exit(1)
+		}
 	}
 
 	// 将 bridge 启动
@@ -165,12 +167,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	klog.Infof("set ovs bridge up successfully")
+
 	// 将指向 physical nic 的路由修改到 bridge
 	err = changeRoute(defaultClusterCIDR, bridgeLink)
 	if err != nil {
 		klog.Errorf("failed to change route, cidr: %v, link: %v", defaultClusterCIDR, bridgeLink)
 		os.Exit(1)
 	}
+
+	klog.Infof("change ip route successfully")
 
 	// 启动 ipam server
 	ipamConf := allocator.IPAMConfig{
@@ -179,14 +185,14 @@ func main() {
 		EtcdServer: []string{"127.0.0.1:2379"},
 		Ranges: []allocator.RangeSet{
 			[]allocator.Range{
-				allocator.Range{
-					RangeStart: net.ParseIP("192.168.50.2"),
-					RangeEnd:   net.ParseIP("192.168.50.220"),
+				{
+					RangeStart: []byte{192, 168, 50, 241},
+					RangeEnd:   []byte{192, 168, 50, 254},
 					Subnet: types.IPNet(net.IPNet{
-						IP:   net.ParseIP("192.168.50.0"),
+						IP:   []byte{192, 168, 50, 0},
 						Mask: net.IPMask([]byte{255, 255, 255, 0}),
 					}),
-					Gateway: net.ParseIP("192.168.50.1"),
+					Gateway: []byte{192, 168, 50, 1},
 				},
 			},
 		},
@@ -197,6 +203,8 @@ func main() {
 		klog.Errorf("new ipam server error: %v", err)
 		os.Exit(1)
 	}
+
+	klog.Infof("run ipam server")
 
 	err = ipamServer.Run()
 	if err != nil {

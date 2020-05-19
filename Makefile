@@ -1,4 +1,4 @@
-IMAGE_REPO=joyme/kubeovs-l2
+IMAGE_REPO=joyme/kubeovs
 IMAGE_TAG=dev
 
 all: compile build push

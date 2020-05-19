@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -17,6 +21,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/j-keck/arping"
+	"github.com/joyme123/kubeovs-l2/pkg/daemon"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/exp/rand"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -102,6 +107,7 @@ func setupVeth(netns ns.NetNS, ifName string) (*current.Interface, *current.Inte
 		contIface.Mac = containerVeth.HardwareAddr.String()
 		contIface.Sandbox = netns.Path()
 		hostIface.Name = hostVeth.Name
+		klog.Infof("host namespace path: %v", netns.Path())
 		return nil
 	})
 	if err != nil {
@@ -170,7 +176,7 @@ func getAvailableIP() (*current.Result, error) {
 	// n1 := rand.Int() % 256
 	rand.Seed(uint64(time.Now().UnixNano()))
 	n1 := 50
-	n2 := rand.Int() % 256
+	n2 := rand.Int()%(255-241) + 241
 
 	// TODO(jiang): 暂时模式是第0个
 	index := 2
@@ -189,6 +195,47 @@ func getAvailableIP() (*current.Result, error) {
 		},
 		// TODO: routes 暂时留空
 	}, nil
+}
+
+func getAvailableIPFromDaemon(ip string, containerID, ifName string) (*current.Result, error) {
+	socketPath := daemon.GenerateSocketPath()
+	httpc := http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", socketPath)
+			},
+		},
+	}
+
+	params := make(url.Values)
+	params.Set("ips", ip)
+	params.Set("containerID", containerID)
+	params.Set("ifName", ifName)
+
+	resp, err := httpc.Post("http://unix/add", "application/x-www-form-urlencoded", strings.NewReader(params.Encode()))
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("status code: %v", resp.StatusCode)
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	klog.Infof("ipam response: %v", string(data))
+
+	var result current.Result
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return nil, err
+	}
+	klog.Infof("result: %v", result)
+
+	return &result, nil
 }
 
 func calcGatewayIP(ipn *net.IPNet) net.IP {
@@ -337,6 +384,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	klog.Infof("setup veth success, host: %v, container: %v", hostInterface.Name, containerInterface.Name)
+
 	podNamespace, podName, err := getPodInfo()
 
 	err = addPort(netConf.BridgeName, hostInterface.Name, containerInterface.Mac, args.Netns, podNamespace, podName)
@@ -354,9 +403,20 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// TODO: ipam 可以拿出来，作为一个插件
 	// 从全局拿到应该可分配的 ip addr
-	ipamResult, err := getAvailableIP()
+	localIpamResult, err := getAvailableIP()
 	if err != nil {
 		return err
+	}
+
+	ipamResult, err := getAvailableIPFromDaemon(localIpamResult.IPs[0].Address.IP.String(), args.ContainerID, args.IfName)
+	if err != nil {
+		return err
+	}
+
+	for i := range ipamResult.IPs {
+		// 暂时写死成2
+		index := 2
+		ipamResult.IPs[i].Interface = &index
 	}
 
 	result.IPs = ipamResult.IPs
@@ -426,10 +486,32 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 	}
 
-	if netConf.IPAM.Type != "" {
-		if err := ipam.ExecDel(netConf.IPAM.Type, args.StdinData); err != nil {
-			return err
-		}
+	// 释放 ip
+	containerID := args.ContainerID
+	ifName := args.IfName
+	klog.Infof("release ip for container: %v, interface: %v", containerID, ifName)
+
+	socketPath := daemon.GenerateSocketPath()
+	httpc := http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", socketPath)
+			},
+		},
+	}
+
+	params := make(url.Values)
+	params.Set("containerID", containerID)
+	params.Set("ifName", ifName)
+
+	resp, err := httpc.Post("http://unix/del", "application/x-www-form-urlencoded", strings.NewReader(params.Encode()))
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != 200 {
+		klog.Errorf("status code: %v", resp.StatusCode)
+		return fmt.Errorf("status code: %v", resp.StatusCode)
 	}
 
 	if args.Netns == "" {

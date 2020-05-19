@@ -18,11 +18,14 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"k8s.io/klog"
 )
 
 // Contains returns true if any range in this set contains an IP
 func (s *RangeSet) Contains(addr net.IP) bool {
-	r, _ := s.RangeFor(addr)
+	r, err := s.RangeFor(addr)
+	klog.Infof("Contains error: %v", err)
 	return r != nil
 }
 

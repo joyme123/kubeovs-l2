@@ -1,0 +1,34 @@
+version: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: kubeovs-daemon
+  namespace: kube-system
+  labels:
+    app: kubeovs
+spec:
+  selector:
+    matchLabels:
+      app: kubeovs
+  template:
+    metadata:
+      labels:
+        app: kubeovs
+    spec:
+      containers:
+      - name: main
+        image: joyme/kubeovs:latest
+        command: ['start.sh']
+        volumeMounts:
+        - name: socket
+          mountPath: /var/run/kubeovs/
+        - name: cni
+          mountPath: /etc/cni/net.d/
+      volumes:
+        - name: socket
+          hostPath:
+            path: /var/run/kubeovs/
+            type: Directory
+        - name: cni
+          hostPath:
+            path: /etc/cni/net.d/
+            type: Directory

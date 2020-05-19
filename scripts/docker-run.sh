@@ -17,5 +17,6 @@ function cleanup() {
 }
 trap cleanup EXIT
 
-docker run --net=container:$contid $@
+docker run --net=container:$contid "$@"
+
 
