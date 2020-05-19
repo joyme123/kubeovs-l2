@@ -8,6 +8,9 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/containernetworking/cni/pkg/types"
+	"github.com/joyme123/kubeovs-l2/pkg/daemon"
+	"github.com/joyme123/kubeovs-l2/pkg/ipametcd/backend/allocator"
 	"github.com/vishvananda/netlink"
 	"k8s.io/klog"
 )
@@ -164,5 +167,40 @@ func main() {
 
 	// 将指向 physical nic 的路由修改到 bridge
 	err = changeRoute(defaultClusterCIDR, bridgeLink)
+	if err != nil {
+		klog.Errorf("failed to change route, cidr: %v, link: %v", defaultClusterCIDR, bridgeLink)
+		os.Exit(1)
+	}
 
+	// 启动 ipam server
+	ipamConf := allocator.IPAMConfig{
+		Name:       "kubeovs-net",
+		Type:       "kubeovs-l2",
+		EtcdServer: []string{"127.0.0.1:2379"},
+		Ranges: []allocator.RangeSet{
+			[]allocator.Range{
+				allocator.Range{
+					RangeStart: net.ParseIP("192.168.50.2"),
+					RangeEnd:   net.ParseIP("192.168.50.220"),
+					Subnet: types.IPNet(net.IPNet{
+						IP:   net.ParseIP("192.168.50.0"),
+						Mask: net.IPMask([]byte{255, 255, 255, 0}),
+					}),
+					Gateway: net.ParseIP("192.168.50.1"),
+				},
+			},
+		},
+	}
+
+	ipamServer, err := daemon.NewIpamServer(&ipamConf)
+	if err != nil {
+		klog.Errorf("new ipam server error: %v", err)
+		os.Exit(1)
+	}
+
+	err = ipamServer.Run()
+	if err != nil {
+		klog.Errorf("run ipam server error: %v", err)
+		os.Exit(1)
+	}
 }

@@ -27,14 +27,14 @@ import (
 )
 
 type IPAllocator struct {
-	rangeset *RangeSet
+	Rangeset *RangeSet
 	store    backend.Store
 	rangeID  string // Used for tracking last reserved ip
 }
 
 func NewIPAllocator(s *RangeSet, store backend.Store, id int) *IPAllocator {
 	return &IPAllocator{
-		rangeset: s,
+		Rangeset: s,
 		store:    store,
 		rangeID:  strconv.Itoa(id),
 	}
@@ -53,7 +53,7 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 			return nil, err
 		}
 
-		r, err := a.rangeset.RangeFor(requestedIP)
+		r, err := a.Rangeset.RangeFor(requestedIP)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 			return nil, err
 		}
 		if !reserved {
-			return nil, fmt.Errorf("requested IP address %s is not available in range set %s", requestedIP, a.rangeset.String())
+			return nil, fmt.Errorf("requested IP address %s is not available in range set %s", requestedIP, a.Rangeset.String())
 		}
 		reservedIP = &net.IPNet{IP: requestedIP, Mask: r.Subnet.Mask}
 		gw = r.Gateway
@@ -79,7 +79,7 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 		allocatedIPs := a.store.GetByID(id, ifname)
 		for _, allocatedIP := range allocatedIPs {
 			// check whether the existing IP belong to this range set
-			if _, err := a.rangeset.RangeFor(allocatedIP); err == nil {
+			if _, err := a.Rangeset.RangeFor(allocatedIP); err == nil {
 				return nil, fmt.Errorf("%s has been allocated to %s, duplicate allocation is not allowed", allocatedIP.String(), id)
 			}
 		}
@@ -106,7 +106,7 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 	}
 
 	if reservedIP == nil {
-		return nil, fmt.Errorf("no IP addresses available in range set: %s", a.rangeset.String())
+		return nil, fmt.Errorf("no IP addresses available in range set: %s", a.Rangeset.String())
 	}
 	version := "4"
 	if reservedIP.IP.To4() == nil {
@@ -149,7 +149,7 @@ type RangeIter struct {
 // We may wish to consider avoiding recently-released IPs in the future.
 func (a *IPAllocator) GetIter() (*RangeIter, error) {
 	iter := RangeIter{
-		rangeset: a.rangeset,
+		rangeset: a.Rangeset,
 	}
 
 	// Round-robin by trying to allocate from the last reserved IP + 1
@@ -161,12 +161,12 @@ func (a *IPAllocator) GetIter() (*RangeIter, error) {
 	if err != nil && !os.IsNotExist(err) {
 		log.Printf("Error retrieving last reserved ip: %v", err)
 	} else if lastReservedIP != nil {
-		startFromLastReservedIP = a.rangeset.Contains(lastReservedIP)
+		startFromLastReservedIP = a.Rangeset.Contains(lastReservedIP)
 	}
 
 	// Find the range in the set with this IP
 	if startFromLastReservedIP {
-		for i, r := range *a.rangeset {
+		for i, r := range *a.Rangeset {
 			if r.Contains(lastReservedIP) {
 				iter.rangeIdx = i
 				iter.startRange = i
@@ -180,7 +180,7 @@ func (a *IPAllocator) GetIter() (*RangeIter, error) {
 	} else {
 		iter.rangeIdx = 0
 		iter.startRange = 0
-		iter.startIP = (*a.rangeset)[0].RangeStart
+		iter.startIP = (*a.Rangeset)[0].RangeStart
 	}
 	return &iter, nil
 }

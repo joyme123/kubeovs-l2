@@ -41,7 +41,7 @@ func mkalloc() IPAllocator {
 	store := fakestore.NewFakeStore(map[string]string{}, map[string]net.IP{})
 
 	alloc := IPAllocator{
-		rangeset: &p,
+		Rangeset: &p,
 		store:    store,
 		rangeID:  "rangeid",
 	}
@@ -65,7 +65,7 @@ func (t AllocatorTestCase) run(idx int) (*current.IPConfig, error) {
 	store := fakestore.NewFakeStore(t.ipmap, map[string]net.IP{"rangeid": net.ParseIP(t.lastIP)})
 
 	alloc := IPAllocator{
-		rangeset: &p,
+		Rangeset: &p,
 		store:    store,
 		rangeID:  "rangeid",
 	}
@@ -270,7 +270,7 @@ var _ = Describe("host-local ip allocator", func() {
 
 			It("must return an error when the requested IP is after RangeEnd", func() {
 				alloc := mkalloc()
-				(*alloc.rangeset)[0].RangeEnd = net.IP{192, 168, 1, 4}
+				(*alloc.Rangeset)[0].RangeEnd = net.IP{192, 168, 1, 4}
 				requestedIP := net.IP{192, 168, 1, 5}
 				_, err := alloc.Get("ID", "eth0", requestedIP)
 				Expect(err).To(HaveOccurred())
@@ -278,7 +278,7 @@ var _ = Describe("host-local ip allocator", func() {
 
 			It("must return an error when the requested IP is before RangeStart", func() {
 				alloc := mkalloc()
-				(*alloc.rangeset)[0].RangeStart = net.IP{192, 168, 1, 3}
+				(*alloc.Rangeset)[0].RangeStart = net.IP{192, 168, 1, 3}
 				requestedIP := net.IP{192, 168, 1, 2}
 				_, err := alloc.Get("ID", "eth0", requestedIP)
 				Expect(err).To(HaveOccurred())

@@ -2,6 +2,11 @@ module github.com/joyme123/kubeovs-l2
 
 go 1.13
 
+replace (
+	github.com/coreos/go-systemd => github.com/coreos/go-systemd/v22 v22.0.0
+	google.golang.org/grpc => google.golang.org/grpc v1.26.0
+)
+
 require (
 	github.com/alexflint/go-filemutex v1.1.0 // indirect
 	github.com/argoproj/argo v2.5.2+incompatible // indirect
@@ -14,7 +19,7 @@ require (
 	github.com/onsi/gomega v1.9.0
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/projectcalico/libcalico-go v1.7.3 // indirect
-	github.com/sirupsen/logrus v1.6.0 // indirect
+	github.com/sirupsen/logrus v1.6.0
 	github.com/vishvananda/netlink v1.1.0
 	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 	golang.org/x/exp v0.0.0-20200331195152-e8c3332aa8e5
