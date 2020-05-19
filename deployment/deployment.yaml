@@ -1,3 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeovs-config
+  namespace: kube-system
+data: 
+  kubeovs-config.yaml: |
+    nic: enp0s8
+    clusterCIDR: "192.168.50.0/24"
+    etcdServer: ["192.168.50.63:2379"]
+    ipam:
+      rangeStart: 192.168.50.241
+      rangeEnd: 192.168.50.254
+      subnetIP: 192.168.50.0
+      subnetMask: 255.255.255.0
+      gateway: 192.168.50.1
+---
 version: extensions/v1beta1
 kind: DaemonSet
 metadata:
@@ -17,12 +34,14 @@ spec:
       containers:
       - name: main
         image: joyme/kubeovs:latest
-        command: ['start.sh']
+        command: ['start.sh', "/etc/kubeovs-config.yaml"]
         volumeMounts:
         - name: socket
           mountPath: /var/run/kubeovs/
         - name: cni
           mountPath: /etc/cni/net.d/
+        - name: config
+          mountPath: /etc/
       volumes:
         - name: socket
           hostPath:
@@ -32,3 +51,6 @@ spec:
           hostPath:
             path: /etc/cni/net.d/
             type: Directory
+        - name: config
+          configMap:
+            name: kubeovs-config

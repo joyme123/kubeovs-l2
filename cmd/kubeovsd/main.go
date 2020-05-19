@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -16,10 +17,13 @@ import (
 )
 
 const (
-	cniConfigPath           = "/etc/cni/net.d/10-kubeovsl2.conf"
-	bridgeName              = "kubeovs-br"
+	cniConfigPath = "/etc/cni/net.d/10-kubeovsl2.conf"
+	bridgeName    = "kubeovs-br"
+)
+
+var (
 	defaultNIC              = "enp0s8"
-	defaultControllerTarget = "tcp:127.0.0.1:6653"
+	defaultControllerTarget = "tcp:127.0.0.1:6653" // 暂时没用
 	defaultClusterCIDR      = "192.168.50.0/24"
 )
 
@@ -100,8 +104,36 @@ func main() {
 	klog.InitFlags(flag.CommandLine)
 	klog.Info("starting kubeovs")
 
+	var configPath string
+	flag.StringVar(&configPath, "c", "/etc/kubeovs-config", "specify config file path")
+	flag.Parse()
+
+	f, err := os.Open(configPath)
+	if err != nil {
+		klog.Errorf("open config file %v error: %v", configPath, err)
+		os.Exit(1)
+	}
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		klog.Errorf("get config data error: %v", err)
+		os.Exit(1)
+	}
+
+	var conf KubeOVSDConfig
+
+	err = json.Unmarshal(data, &conf)
+	if err != nil {
+		klog.Errorf("unmarshal json error: %v", err)
+		os.Exit(1)
+	}
+
+	// 从配置文件中读取配置
+	defaultNIC = conf.NIC
+	defaultClusterCIDR = conf.ClusterCIDR
+
 	// 写入 cni 配置文件
-	err := installCNIConf()
+	err = installCNIConf()
 	if err != nil {
 		klog.Errorf("failed to intall CNI: %v", err)
 		os.Exit(1)
@@ -182,17 +214,17 @@ func main() {
 	ipamConf := allocator.IPAMConfig{
 		Name:       "kubeovs-net",
 		Type:       "kubeovs-l2",
-		EtcdServer: []string{"127.0.0.1:2379"},
+		EtcdServer: conf.EtcdServer,
 		Ranges: []allocator.RangeSet{
 			[]allocator.Range{
 				{
-					RangeStart: []byte{192, 168, 50, 241},
-					RangeEnd:   []byte{192, 168, 50, 254},
+					RangeStart: net.ParseIP(conf.IPAM.RangeStart).To4(),
+					RangeEnd:   net.ParseIP(conf.IPAM.RangeEnd).To4(),
 					Subnet: types.IPNet(net.IPNet{
-						IP:   []byte{192, 168, 50, 0},
-						Mask: net.IPMask([]byte{255, 255, 255, 0}),
+						IP:   net.ParseIP(conf.IPAM.SubnetIP).To4(),
+						Mask: net.IPMask(net.ParseIP(conf.IPAM.SubnetMask).To4()),
 					}),
-					Gateway: []byte{192, 168, 50, 1},
+					Gateway: net.ParseIP(conf.IPAM.Gateway).To4(),
 				},
 			},
 		},

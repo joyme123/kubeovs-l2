@@ -1,0 +1,9 @@
+nic: enp0s8
+clusterCIDR: "192.168.50.0/24"
+etcdServer: ["192.168.50.63:2379"]
+ipam:
+    rangeStart: 192.168.50.241
+    rangeEnd: 192.168.50.254
+    subnetIP: 192.168.50.0
+    subnetMask: 255.255.255.0
+    gateway: 192.168.50.1
